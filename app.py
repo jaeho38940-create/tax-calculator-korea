@@ -1,114 +1,201 @@
 import streamlit as st
 import pandas as pd
+import altair as alt
 
-# --- 1. 토스 스타일 UI 적용을 위한 마법의 CSS 코드 ---
-# 이 부분은 디자인을 담당합니다. 복잡해 보이지만 그냥 두시면 됩니다!
+# --- 1. 디자인 및 스타일 설정 ---
+st.set_page_config(page_title="연말정산 계산기", layout="centered")
 st.markdown("""
 <style>
-    /* 전체 배경색을 토스처럼 부드러운 밝은 회색으로 변경 */
-    .stApp {
-        background-color: #F2F4F6;
-    }
-    
-    /* 메인 화면의 컨테이너들을 둥글고 하얀 카드처럼 만들기 */
-    [data-testid="stVerticalBlock"] > [style*="flex-direction: column;"] > [data-testid="stVerticalBlock"] {
+    .stApp { background-color: #F2F4F6; }
+
+    [data-testid="stForm"] {
         background-color: white;
-        padding: 25px;
-        border-radius: 20px; /* 둥근 모서리 */
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05); /* 부드러운 그림자 */
-        margin-bottom: 20px;
+        padding: 30px;
+        border-radius: 20px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
     }
 
-    /* 입력창과 버튼들도 조금 더 둥글게 */
-    .stTextInput input, .stNumberInput input {
-        border-radius: 12px !important;
+    .stButton > button {
+        width: 100%;
+        background-color: #3182F6; 
+        color: white;
+        border-radius: 12px;
+        height: 50px;
+        font-size: 18px;
+        font-weight: bold;
+        border: none;
     }
-    
-    /* 사이드바 배경도 약간 조절 */
-    [data-testid="stSidebar"] {
-        background-color: #FFFFFF;
-    }
-    
-    /* 메트릭(큰 숫자) 스타일 조정 */
-    [data-testid="stMetricValue"] {
-        font-weight: 700;
-        color: #333D4B; /* 토스 스타일 진한 남색 */
+    .stButton > button:hover {
+        background-color: #1B64DA;
+        color: white;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. 앱 기본 설정 ---
-st.set_page_config(page_title="재호의 연말정산", layout="centered")
-st.title("💰 2026 연말정산 계산기")
-st.caption("내 소비 습관을 분석하고 숨은 환급금을 찾아보세요.")
-
-# --- 3. 사용자 입력 섹션 (단위를 '만원'으로 변경!) ---
-with st.sidebar:
-    st.header("📋 내 정보 입력")
-    # 입력 단위는 만원, 기본값 4000만원, 100만원 단위로 조절
-    salary_manwon = st.number_input("연봉 (단위: 만원)", value=4000, step=100, format="%d")
-    credit_card_manwon = st.number_input("신용카드 사용액 (단위: 만원)", value=1500, step=50, format="%d")
-    debit_card_manwon = st.number_input("체크카드/현금영수증 (단위: 만원)", value=500, step=50, format="%d")
-
-# --- 4. 연말정산 핵심 로직 (내부 계산은 '원' 단위로 변환해서 정확하게) ---
-# 입력받은 만원 단위를 다시 실제 원 단위로 변환
-salary = salary_manwon * 10000
-credit_card = credit_card_manwon * 10000
-debit_card = debit_card_manwon * 10000
-
-threshold = salary * 0.25 # 공제 문턱 (총 급여의 25%)
-total_spent = credit_card + debit_card
-
-if total_spent <= threshold:
-    deduction = 0
-    # 남은 금액 계산
-    remaining = threshold - total_spent
-    message = f"😢 공제 문턱까지 **{int(remaining/10000):,}만원** 더 써야 공제가 시작돼요. 혜택 좋은 신용카드를 사용해보세요!"
-    alert_type = "warning"
-else:
-    # (단순화된 로직) 초과분에 대해 신용카드 15%, 체크카드 30% 비율적으로 적용 가정
-    # 실제로는 신용카드 사용분부터 먼저 차감되는 복잡한 순서가 있습니다.
-    deduction = (credit_card * 0.15) + (debit_card * 0.30)
-    # 법적 한도 적용 (예: 300만원)
-    deduction = min(deduction, 3000000)
-    message = "🎉 축하합니다! 소득공제 대상이에요. 이제부터는 공제율이 높은 **체크카드**를 쓰면 환급액이 더 늘어나요!"
-    alert_type = "success"
-
-# --- 5. 결과 화면 구성 (토스 스타일 카드형 UI) ---
-
-# 첫 번째 카드: 예상 결과 요약
-with st.container():
-    st.subheader("나의 예상 결과")
-    
-    # 결과를 다시 '만원' 단위로 보여주기 위해 나누기 10000
-    deduction_manwon = int(deduction / 10000)
-    threshold_manwon = int(threshold / 10000)
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("예상 소득공제액", f"{deduction_manwon:,} 만원")
-    with col2:
-        st.metric("공제 시작 문턱 (연봉 25%)", f"{threshold_manwon:,} 만원", help="이 금액 이상 써야 공제가 시작됩니다.")
-    
-    st.divider()
-    if alert_type == "success":
-        st.success(message)
+# --- 함수: 연봉별 세율 계산 ---
+def get_tax_rate_info(salary):
+    if salary <= 5000000:
+        labor_deduction = salary * 0.7
+    elif salary <= 15000000:
+        labor_deduction = 3500000 + (salary - 5000000) * 0.4
+    elif salary <= 45000000:
+        labor_deduction = 7500000 + (salary - 15000000) * 0.15
+    elif salary <= 100000000:
+        labor_deduction = 12000000 + (salary - 45000000) * 0.05
     else:
-        st.warning(message)
+        labor_deduction = 14750000 + (salary - 100000000) * 0.02
 
-# 두 번째 카드: 비교 차트
-with st.container():
-    st.subheader("📊 비슷한 연봉 그룹과 비교")
-    st.caption("나와 비슷한 소득을 가진 사람들은 어떻게 쓰고 있을까요?")
-    
-    # 비교를 위한 가상 데이터 (체크카드 사용 비중 계산)
-    my_debit_ratio = debit_card / (total_spent + 1) * 100 # 0으로 나누기 방지
-    
-    comparison_data = pd.DataFrame({
-        "구분": ["나", "환급 상위 10%", "평균"],
-        "체크카드 비중(%)": [my_debit_ratio, 65, 40]
-    })
-    
-    # 차트 색상을 토스 파란색으로 변경
-    st.bar_chart(comparison_data.set_index("구분"), color=["#3182F6"])
-    st.caption("💡 환급을 많이 받는 사람들은 체크카드/현금영수증 사용 비중이 높습니다.")
+    tax_base = salary - labor_deduction - 1500000
+
+    if tax_base < 0:
+        return 0, "면세 구간"
+
+    if tax_base <= 14000000:
+        return 0.066, "6.6% (과표 1,400만원 이하)"
+    elif tax_base <= 50000000:
+        return 0.165, "16.5% (과표 5,000만원 이하)"
+    elif tax_base <= 88000000:
+        return 0.264, "26.4% (과표 8,800만원 이하)"
+    elif tax_base <= 150000000:
+        return 0.385, "38.5% (과표 1.5억원 이하)"
+    elif tax_base <= 300000000:
+        return 0.418, "41.8% (과표 3억원 이하)"
+    elif tax_base <= 500000000:
+        return 0.440, "44.0% (과표 5억원 이하)"
+    elif tax_base <= 1000000000:
+        return 0.462, "46.2% (과표 10억원 이하)"
+    else:
+        return 0.495, "49.5% (과표 10억원 초과)"
+
+st.title("💰 연말정산 예상 환급액 찾기")
+st.caption("국세청 최신 세율 정보를 반영하여 정확하게 계산합니다.")
+
+# --- 2. 입력 화면 ---
+with st.form("calc_form"):
+    st.subheader("정보를 입력해주세요")
+
+    salary_manwon = st.number_input("연간 총 급여 (세전)", value=4000, step=100)
+    st.caption(f"📍 입력: {salary_manwon:,}만원")
+
+    st.divider() 
+
+    credit_card_manwon = st.number_input("신용카드 사용액", value=1500, step=50)
+    debit_cash_manwon = st.number_input("체크카드 + 현금영수증", value=500, step=50)
+
+    st.write("") 
+    st.write("") 
+
+    submitted = st.form_submit_button("계산하기")
+
+# --- 3. 계산 및 결과 화면 ---
+if submitted:
+    salary = salary_manwon * 10000
+    credit_card = credit_card_manwon * 10000
+    debit_cash = debit_cash_manwon * 10000
+
+    threshold = salary * 0.25 
+
+    # [수정됨] 불필요한 설명을 제거하고 금액만 남겼습니다!
+    if salary >= 70000000:
+        limit = 2500000 
+        limit_desc = "250만원" 
+    else:
+        limit = 3000000 
+        limit_desc = "300만원"
+
+    tax_rate, tax_desc = get_tax_rate_info(salary)
+
+    total_spent = credit_card + debit_cash
+    result_container = st.container()
+
+    with result_container:
+        if total_spent <= threshold:
+            raw_deduction = 0
+            final_deduction = 0
+            is_overflow = False
+            bar_color = "#3182F6" 
+
+            remaining_spent = threshold - total_spent
+            st.warning("😢 아직 공제 문턱(연봉 25%)을 넘지 못했어요.")
+            st.write(f"최소 **{int(remaining_spent/10000):,}만원**을 더 써야 공제가 시작됩니다.")
+
+            refund_estimate = 0
+
+        else:
+            used_credit = min(credit_card, threshold)
+            remaining_threshold = threshold - used_credit
+            used_debit = min(debit_cash, remaining_threshold)
+
+            taxable_credit = credit_card - used_credit
+            taxable_debit = debit_cash - used_debit
+
+            raw_deduction = (taxable_credit * 0.15) + (taxable_debit * 0.30)
+            final_deduction = min(raw_deduction, limit)
+
+            if raw_deduction > limit:
+                is_overflow = True
+                # [수정됨] 이제 깔끔하게 "한도(250만원)를 초과 달성했습니다!" 라고 나옵니다.
+                st.success(f"🎉 한도({limit_desc})를 초과 달성했습니다!")
+                bar_color = "#FF6B6B" # 빨강
+            else:
+                is_overflow = False
+                gap = limit - raw_deduction
+                st.info(f"💸 한도까지 **{int(gap/10000):,}만원** 남았습니다.")
+                bar_color = "#3182F6" # 파랑
+
+            refund_estimate = final_deduction * tax_rate 
+
+            st.divider()
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("예상 소득공제 금액", f"{int(final_deduction/10000):,} 만원")
+            with col2:
+                st.metric("실제 절세 효과 (예상)", f"{int(refund_estimate/10000):,} 만원")
+                st.caption(f"적용 세율: {tax_desc}")
+
+        # --- 4. 오버랩 차트 ---
+        source = pd.DataFrame([
+            {"category": "현황", "value": int(limit/10000), "type": "최대 한도"}, 
+            {"category": "현황", "value": int(raw_deduction/10000), "type": "내 공제액"} 
+        ])
+
+        base = alt.Chart(source).encode(
+            x=alt.X('category', axis=None) 
+        )
+
+        bar_limit = base.transform_filter(
+            alt.datum.type == '최대 한도'
+        ).mark_bar(
+            size=50,
+            color='#E5E8EB',
+            cornerRadius=8
+        ).encode(
+            y=alt.Y('value', title='금액 (만원)')
+        )
+
+        bar_mine = base.transform_filter(
+            alt.datum.type == '내 공제액'
+        ).mark_bar(
+            size=50,
+            color=bar_color, 
+            cornerRadius=8
+        ).encode(
+            y=alt.Y('value', title='금액 (만원)'),
+            tooltip=['type', 'value']
+        )
+
+        if is_overflow:
+            chart = (bar_mine + bar_limit)
+        else:
+            chart = (bar_limit + bar_mine)
+
+        chart = chart.properties(
+            height=350
+        ).configure_axis(
+            grid=False,
+            labelFontSize=12
+        ).configure_view(
+            strokeWidth=0 
+        )
+
+        st.altair_chart(chart, use_container_width=True)
