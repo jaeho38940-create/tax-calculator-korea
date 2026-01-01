@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 
+# --- [CCTV] 접속 알림 코드 ---
+print("🔔 누군가 내 앱에 접속(새로고침) 했습니다!")
+
 # --- 1. 디자인 및 스타일 설정 ---
 st.set_page_config(page_title="연말정산 계산기", layout="centered")
 
