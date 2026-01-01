@@ -4,21 +4,44 @@ import altair as alt
 
 # --- 1. 디자인 및 스타일 설정 ---
 st.set_page_config(page_title="연말정산 계산기", layout="centered")
+
+# [수정됨] 다크모드에서도 글씨가 잘 보이도록 강제하는 CSS 추가
 st.markdown("""
 <style>
-    .stApp { background-color: #F2F4F6; }
-
+    /* 1. 전체 앱 배경색 고정 */
+    .stApp { 
+        background-color: #F2F4F6 !important; 
+    }
+    
+    /* 2. 모든 텍스트 색상을 진한 남색(#333D4B)으로 강제 고정 (다크모드 무시) */
+    h1, h2, h3, h4, h5, h6, p, div, span, label, .stMarkdown {
+        color: #333D4B !important;
+    }
+    
+    /* 3. 입력창 스타일 (다크모드에서도 하얗게 보이도록) */
     [data-testid="stForm"] {
-        background-color: white;
+        background-color: white !important;
         padding: 30px;
         border-radius: 20px;
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
     }
+    
+    /* 입력 필드 내부 글자색 강제 고정 */
+    .stNumberInput input {
+        color: #333D4B !important;
+        background-color: #FFFFFF !important;
+    }
+    
+    /* 입력 필드 라벨(제목) 색상 고정 */
+    .stNumberInput label {
+        color: #333D4B !important;
+    }
 
+    /* 4. 버튼 스타일 */
     .stButton > button {
         width: 100%;
-        background-color: #3182F6; 
-        color: white;
+        background-color: #3182F6 !important; 
+        color: white !important; /* 버튼 글씨는 흰색 유지 */
         border-radius: 12px;
         height: 50px;
         font-size: 18px;
@@ -26,8 +49,13 @@ st.markdown("""
         border: none;
     }
     .stButton > button:hover {
-        background-color: #1B64DA;
-        color: white;
+        background-color: #1B64DA !important;
+        color: white !important;
+    }
+    
+    /* 5. 경고/성공 메시지 박스 글자색도 강제 조정 */
+    .stAlert {
+        color: #333D4B !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -44,9 +72,9 @@ def get_tax_rate_info(salary):
         labor_deduction = 12000000 + (salary - 45000000) * 0.05
     else:
         labor_deduction = 14750000 + (salary - 100000000) * 0.02
-
+        
     tax_base = salary - labor_deduction - 1500000
-
+    
     if tax_base < 0:
         return 0, "면세 구간"
 
@@ -73,18 +101,18 @@ st.caption("국세청 최신 세율 정보를 반영하여 정확하게 계산�
 # --- 2. 입력 화면 ---
 with st.form("calc_form"):
     st.subheader("정보를 입력해주세요")
-
+    
     salary_manwon = st.number_input("연간 총 급여 (세전)", value=4000, step=100)
     st.caption(f"📍 입력: {salary_manwon:,}만원")
-
+    
     st.divider() 
-
+    
     credit_card_manwon = st.number_input("신용카드 사용액", value=1500, step=50)
     debit_cash_manwon = st.number_input("체크카드 + 현금영수증", value=500, step=50)
-
+    
     st.write("") 
     st.write("") 
-
+    
     submitted = st.form_submit_button("계산하기")
 
 # --- 3. 계산 및 결과 화면 ---
@@ -92,10 +120,9 @@ if submitted:
     salary = salary_manwon * 10000
     credit_card = credit_card_manwon * 10000
     debit_cash = debit_cash_manwon * 10000
-
+    
     threshold = salary * 0.25 
-
-    # [수정됨] 불필요한 설명을 제거하고 금액만 남겼습니다!
+    
     if salary >= 70000000:
         limit = 2500000 
         limit_desc = "250만원" 
@@ -107,34 +134,33 @@ if submitted:
 
     total_spent = credit_card + debit_cash
     result_container = st.container()
-
+    
     with result_container:
         if total_spent <= threshold:
             raw_deduction = 0
             final_deduction = 0
             is_overflow = False
             bar_color = "#3182F6" 
-
+            
             remaining_spent = threshold - total_spent
             st.warning("😢 아직 공제 문턱(연봉 25%)을 넘지 못했어요.")
             st.write(f"최소 **{int(remaining_spent/10000):,}만원**을 더 써야 공제가 시작됩니다.")
-
+            
             refund_estimate = 0
-
+            
         else:
             used_credit = min(credit_card, threshold)
             remaining_threshold = threshold - used_credit
             used_debit = min(debit_cash, remaining_threshold)
-
+            
             taxable_credit = credit_card - used_credit
             taxable_debit = debit_cash - used_debit
-
+            
             raw_deduction = (taxable_credit * 0.15) + (taxable_debit * 0.30)
             final_deduction = min(raw_deduction, limit)
-
+            
             if raw_deduction > limit:
                 is_overflow = True
-                # [수정됨] 이제 깔끔하게 "한도(250만원)를 초과 달성했습니다!" 라고 나옵니다.
                 st.success(f"🎉 한도({limit_desc})를 초과 달성했습니다!")
                 bar_color = "#FF6B6B" # 빨강
             else:
@@ -144,7 +170,7 @@ if submitted:
                 bar_color = "#3182F6" # 파랑
 
             refund_estimate = final_deduction * tax_rate 
-
+            
             st.divider()
             col1, col2 = st.columns(2)
             with col1:
